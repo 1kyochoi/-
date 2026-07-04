@@ -1,0 +1,6 @@
+{
+  "name": "Artist Portfolio",
+  "description": "A high-end, premium contemporary artist portfolio with interactive project galleries, artist statement texts, CV, contact forms, and a secure administration panel to manage all contents.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
