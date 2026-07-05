@@ -1,23 +1,37 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Project } from '../types';
+import { Project, WorkCategory } from '../types';
 
 interface WorksViewProps {
   projects: Project[];
   lang: 'ko' | 'en';
   onNavigateToProject: (projectId: string) => void;
+  categories?: WorkCategory[];
 }
 
-export default function WorksView({ projects, lang, onNavigateToProject }: WorksViewProps) {
+export default function WorksView({ projects, lang, onNavigateToProject, categories }: WorksViewProps) {
   const [activeCategory, setActiveCategory] = useState<string>('All');
 
-  // Filter out unpublished items for visitors
-  const publishedItems = useMemo(() => {
-    return projects.filter((p) => p.isPublished);
-  }, [projects]);
+  const defaultCategories: WorkCategory[] = [
+    { name: 'Projects', enabled: true },
+    { name: 'Exhibitions', enabled: true },
+    { name: 'Books', enabled: true }
+  ];
 
-  // Extract categories dynamically but filter with specified order: All, Projects, Exhibitions, Books
-  const filterCategories = ['All', 'Projects', 'Exhibitions', 'Books'];
+  const currentCategories = categories && categories.length > 0 ? categories : defaultCategories;
+  const activeCategoriesList = useMemo(() => {
+    return currentCategories.filter(c => c.enabled).map(c => c.name);
+  }, [currentCategories]);
+
+  // Filter out unpublished items for visitors and items belonging to disabled categories
+  const publishedItems = useMemo(() => {
+    return projects.filter((p) => p.isPublished && activeCategoriesList.includes(p.category));
+  }, [projects, activeCategoriesList]);
+
+  // Filter categories shown in the UI
+  const filterCategories = useMemo(() => {
+    return ['All', ...activeCategoriesList];
+  }, [activeCategoriesList]);
 
   const filteredItems = useMemo(() => {
     if (activeCategory === 'All') return publishedItems;
@@ -36,10 +50,10 @@ export default function WorksView({ projects, lang, onNavigateToProject }: Works
       <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between border-b border-stone-200/40 pb-6">
         <div>
           <span className="text-[10px] font-mono text-stone-400 tracking-widest uppercase">
-            {lang === 'ko' ? '작품 및 아카이브' : 'INDEX OF WORKS'}
+            {lang === 'ko' ? 'INDEX OF WORKS' : 'INDEX OF WORKS'}
           </span>
           <h1 className="text-xl sm:text-2xl font-light tracking-wide text-stone-900 uppercase mt-1">
-            {lang === 'ko' ? '기록 및 연작' : 'WORKS'}
+            {lang === 'ko' ? '작품 및 아카이브' : 'WORKS'}
           </h1>
         </div>
 
@@ -70,7 +84,7 @@ export default function WorksView({ projects, lang, onNavigateToProject }: Works
       </div>
 
       {/* 3. Repeating Grid Rows (Up to 5 columns with natural aspect ratio images) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-6 gap-y-12 mt-12" id="goudal-works-list">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-5 gap-x-4 gap-y-12 mt-12" id="goudal-works-list">
         <AnimatePresence mode="popLayout">
           {filteredItems.map((item, index) => {
             const displayIndex = String(index + 1).padStart(2, '0');

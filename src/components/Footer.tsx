@@ -8,9 +8,11 @@ interface FooterProps {
   onAdminClick: () => void;
   isAdmin: boolean;
   onLogout: () => void;
+  hideIntro?: boolean;
+  onOpenInquiry?: () => void;
 }
 
-export default function Footer({ artistInfo, lang, onAdminClick, isAdmin, onLogout }: FooterProps) {
+export default function Footer({ artistInfo, lang, onAdminClick, isAdmin, onLogout, hideIntro = false, onOpenInquiry }: FooterProps) {
   const year = new Date().getFullYear();
 
   return (
@@ -19,13 +21,17 @@ export default function Footer({ artistInfo, lang, onAdminClick, isAdmin, onLogo
         
         {/* Left column: Name and short description */}
         <div className="max-w-md flex flex-col">
-          <span className="custom-artist-name font-light text-sm tracking-[0.2em] uppercase">
-            {lang === 'ko' ? artistInfo.nameKo : artistInfo.nameEn}
-          </span>
-          <p className="text-xs text-stone-400 mt-2 leading-relaxed">
-            {lang === 'ko' ? artistInfo.headlineKo : artistInfo.headlineEn}
-          </p>
-          <span className="text-[10px] text-stone-400 font-mono mt-8 tracking-wider">
+          {!hideIntro && (
+            <>
+              <span className="custom-artist-name font-light text-sm tracking-[0.2em] uppercase">
+                {lang === 'ko' ? artistInfo.nameKo : artistInfo.nameEn}
+              </span>
+              <p className="text-xs text-stone-400 mt-2 leading-relaxed">
+                {lang === 'ko' ? artistInfo.headlineKo : artistInfo.headlineEn}
+              </p>
+            </>
+          )}
+          <span className={`text-[10px] text-stone-400 font-mono tracking-wider ${!hideIntro ? 'mt-8' : 'mt-0'}`}>
             © {year} {artistInfo.nameEn}. ALL RIGHTS RESERVED.
           </span>
         </div>
@@ -37,13 +43,20 @@ export default function Footer({ artistInfo, lang, onAdminClick, isAdmin, onLogo
               {lang === 'ko' ? '연락처 및 소셜 미디어' : 'CONTACT & CHANNELS'}
             </span>
             
-            <a
-              href={`mailto:${artistInfo.email}`}
-              className="flex items-center md:justify-end text-xs text-stone-600 hover:text-stone-950 transition-colors gap-2"
+            <button
+              type="button"
+              onClick={(e) => {
+                if (onOpenInquiry) {
+                  e.preventDefault();
+                  onOpenInquiry();
+                }
+              }}
+              title={lang === 'ko' ? '이메일 문의 보내기' : 'Send email inquiry'}
+              className="flex items-center md:justify-end text-xs text-stone-600 hover:text-stone-950 transition-colors gap-2 cursor-pointer outline-none"
             >
               <Mail className="w-3.5 h-3.5" />
               <span className="font-mono">{artistInfo.email}</span>
-            </a>
+            </button>
             
             <a
               href={`https://instagram.com/${artistInfo.instagram.replace('@', '')}`}

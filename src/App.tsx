@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { initialPortfolioData } from './data/seedData';
 import { PortfolioData, Inquiry } from './types';
+import { isSupabaseConfigured, fetchArtworks } from './supabaseClient';
 
 // Import Views
 import Header from './components/Header';
@@ -12,6 +13,7 @@ import WorkDetailView from './components/WorkDetailView';
 import InfoView from './components/InfoView';
 import ContactView from './components/ContactView';
 import AdminView from './components/AdminView';
+import GlobalInquiryModal from './components/GlobalInquiryModal';
 
 export default function App() {
   const [portfolioData, setPortfolioData] = useState<PortfolioData>(initialPortfolioData);
@@ -19,6 +21,9 @@ export default function App() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [lang, setLang] = useState<'ko' | 'en'>('en');
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(false);
+  const [globalInquiryOpen, setGlobalInquiryOpen] = useState<boolean>(false);
+  const [supabaseLoading, setSupabaseLoading] = useState<boolean>(isSupabaseConfigured());
+  const [supabaseError, setSupabaseError] = useState<string | null>(null);
 
   // 1. Initial State Sync with localStorage
   useEffect(() => {
@@ -26,13 +31,47 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed.artistInfo && parsed.projects) {
+        if (parsed.artistInfo) {
           // If the stored data still refers to the old artist Sehyung Lim, force override with initialPortfolioData
           if (parsed.artistInfo.nameEn === "SEHYUNG LIM" || parsed.artistInfo.nameKo === "임세형") {
             setPortfolioData(initialPortfolioData);
             localStorage.setItem('artist_portfolio_data', JSON.stringify(initialPortfolioData));
           } else {
-            setPortfolioData(parsed);
+            // Sanitize old defaults if they are still loaded from the user's active session
+            let changed = false;
+            if (parsed.artistInfo.headlineKo === "부산과 서울을 오가며 활동하는 현대미술가. 지층과 외벽, 소멸하는 일상적 무대를 촉각적 표면으로 환원하는 회화와 장소특정적 설치 미술을 선보인다.") {
+              parsed.artistInfo.headlineKo = "";
+              changed = true;
+            }
+            if (parsed.artistInfo.headlineEn === "A contemporary artist working between Busan and Seoul, translating urban interfaces, weathered facades, and vanishing spaces into tactile paintings and site-specific installations.") {
+              parsed.artistInfo.headlineEn = "";
+              changed = true;
+            }
+            if (parsed.artistInfo.agencyKo === "갤러리 컨템포러리 서울") {
+              parsed.artistInfo.agencyKo = "";
+              changed = true;
+            }
+            if (parsed.artistInfo.agencyEn === "Gallery Contemporary Seoul") {
+              parsed.artistInfo.agencyEn = "";
+              changed = true;
+            }
+            if (parsed.artistInfo.instagram === "@wonkyo.choi.studio") {
+              parsed.artistInfo.instagram = "@1kyochoi";
+              changed = true;
+            }
+            if (changed) {
+              localStorage.setItem('artist_portfolio_data', JSON.stringify(parsed));
+            }
+            
+            // If Supabase is configured, keep the local storage projects empty to rely solely on Supabase
+            if (isSupabaseConfigured()) {
+              setPortfolioData({
+                ...parsed,
+                projects: []
+              });
+            } else {
+              setPortfolioData(parsed);
+            }
           }
         } else {
           localStorage.setItem('artist_portfolio_data', JSON.stringify(initialPortfolioData));
@@ -45,11 +84,44 @@ export default function App() {
     }
   }, []);
 
+  // 1.5 Fetch Artworks from Supabase if configured
+  useEffect(() => {
+    async function loadSupabase() {
+      if (isSupabaseConfigured()) {
+        try {
+          setSupabaseLoading(true);
+          setSupabaseError(null);
+          const artworks = await fetchArtworks();
+          setPortfolioData((prev) => ({
+            ...prev,
+            projects: artworks,
+          }));
+        } catch (err: any) {
+          console.error('Error fetching artworks from Supabase:', err);
+          setSupabaseError(err.message || 'Failed to fetch artworks from Supabase.');
+        } finally {
+          setSupabaseLoading(false);
+        }
+      }
+    }
+    loadSupabase();
+  }, []);
+
   // Update Portfolio handler (saves state + persists to storage)
   const handleUpdatePortfolio = (updatedData: PortfolioData) => {
     setPortfolioData(updatedData);
-    localStorage.setItem('artist_portfolio_data', JSON.stringify(updatedData));
+    if (isSupabaseConfigured()) {
+      // Clear out the projects before saving to local storage to satisfy "Do not store uploaded artworks in localStorage"
+      const dataToSave = {
+        ...updatedData,
+        projects: []
+      };
+      localStorage.setItem('artist_portfolio_data', JSON.stringify(dataToSave));
+    } else {
+      localStorage.setItem('artist_portfolio_data', JSON.stringify(updatedData));
+    }
   };
+
 
   // Reset to default seed data
   const handleResetToDefault = () => {
@@ -160,6 +232,7 @@ export default function App() {
                 projects={portfolioData.projects}
                 lang={lang}
                 onNavigateToProject={handleNavigateToProject}
+                categories={portfolioData.categories}
               />
             )}
 
@@ -178,6 +251,7 @@ export default function App() {
                 cvItems={portfolioData.cvItems}
                 texts={portfolioData.texts}
                 lang={lang}
+                onOpenInquiry={() => setGlobalInquiryOpen(true)}
               />
             )}
 
@@ -186,6 +260,7 @@ export default function App() {
                 artistInfo={portfolioData.artistInfo}
                 lang={lang}
                 onAddInquiry={handleAddInquiry}
+                onOpenInquiry={() => setGlobalInquiryOpen(true)}
               />
             )}
 
@@ -214,8 +289,19 @@ export default function App() {
             setIsAdminLoggedIn(false);
             handleViewChange('home');
           }}
+          hideIntro={currentView === 'works' || currentView === 'contact'}
+          onOpenInquiry={() => setGlobalInquiryOpen(true)}
         />
       )}
+
+      {/* Global Inquiry Modal */}
+      <GlobalInquiryModal
+        isOpen={globalInquiryOpen}
+        onClose={() => setGlobalInquiryOpen(false)}
+        artistInfo={portfolioData.artistInfo}
+        lang={lang}
+        onAddInquiry={handleAddInquiry}
+      />
     </div>
   );
 }

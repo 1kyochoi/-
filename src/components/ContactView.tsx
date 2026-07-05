@@ -6,9 +6,10 @@ interface ContactViewProps {
   artistInfo: ArtistInfo;
   lang: 'ko' | 'en';
   onAddInquiry: (inquiry: Omit<Inquiry, 'id' | 'date' | 'isRead'>) => void;
+  onOpenInquiry?: () => void;
 }
 
-export default function ContactView({ artistInfo, lang, onAddInquiry }: ContactViewProps) {
+export default function ContactView({ artistInfo, lang, onAddInquiry, onOpenInquiry }: ContactViewProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [subject, setSubject] = useState('Exhibition'); // Exhibition / Purchase / Studio Visit / Collab
@@ -88,9 +89,19 @@ export default function ContactView({ artistInfo, lang, onAddInquiry }: ContactV
                 </div>
                 <div>
                   <span className="mono-meta text-[9px] text-stone-400 block font-light">{lang === 'ko' ? '공식 이메일' : 'EMAIL ADDRESS'}</span>
-                  <a href={`mailto:${artistInfo.email}`} className="text-xs sm:text-sm text-stone-800 hover:text-stone-950 hover:underline font-mono mt-0.5 block">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      if (onOpenInquiry) {
+                        e.preventDefault();
+                        onOpenInquiry();
+                      }
+                    }}
+                    title={lang === 'ko' ? '이메일 문의 보내기' : 'Send email inquiry'}
+                    className="text-xs sm:text-sm text-stone-800 hover:text-stone-950 hover:underline font-mono mt-0.5 block cursor-pointer outline-none text-left"
+                  >
                     {artistInfo.email}
-                  </a>
+                  </button>
                 </div>
               </div>
 
@@ -126,15 +137,7 @@ export default function ContactView({ artistInfo, lang, onAddInquiry }: ContactV
               </div>
             </div>
 
-            {/* Representation footnote */}
-            {artistInfo.agencyKo && (
-              <div className="mt-8 pt-6 border-t border-stone-200/80 text-[11px] text-stone-400 font-light">
-                <span className="font-mono text-[9px] text-stone-400 block uppercase mb-1">{lang === 'ko' ? '대표 에이전시' : 'REPRESENTING AGENCY'}</span>
-                {lang === 'ko' 
-                  ? `본 작가의 일부 연작은 '${artistInfo.agencyKo}'가 대표 위탁 및 배급하고 있습니다.` 
-                  : `Select canvas series are exclusively represented and managed by ${artistInfo.agencyEn}.`}
-              </div>
-            )}
+
           </div>
 
           {/* Aesthetic Quote block */}
@@ -177,7 +180,7 @@ export default function ContactView({ artistInfo, lang, onAddInquiry }: ContactV
                 {/* Sender name */}
                 <div className="flex flex-col">
                   <label className="text-[10px] font-mono text-stone-400 uppercase tracking-widest mb-2 font-medium">
-                    {lang === 'ko' ? '성함 / 기관명' : 'YOUR NAME / AGENCY'} *
+                    {lang === 'ko' ? '성함' : 'YOUR NAME'} *
                   </label>
                   <input
                     type="text"

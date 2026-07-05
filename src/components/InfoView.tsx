@@ -7,9 +7,10 @@ interface InfoViewProps {
   cvItems: CvItem[];
   texts: TextSection[];
   lang: 'ko' | 'en';
+  onOpenInquiry?: () => void;
 }
 
-export default function InfoView({ artistInfo, cvItems, texts, lang }: InfoViewProps) {
+export default function InfoView({ artistInfo, cvItems, texts, lang, onOpenInquiry }: InfoViewProps) {
   // Separate CV items by their exact sections
   const soloExhibitions = cvItems.filter((item) => item.section === 'solo');
   const groupExhibitions = cvItems.filter((item) => item.section === 'group');
@@ -303,9 +304,19 @@ export default function InfoView({ artistInfo, cvItems, texts, lang }: InfoViewP
           <div className="space-y-3 text-xs sm:text-sm font-mono pt-2">
             <div className="flex gap-8">
               <span className="text-stone-400 w-24 uppercase tracking-wider select-none">EMAIL</span>
-              <a href={`mailto:${artistInfo.email}`} className="text-stone-700 hover:text-stone-950 transition-colors border-b border-stone-300 hover:border-stone-950">
+              <button
+                type="button"
+                onClick={(e) => {
+                  if (onOpenInquiry) {
+                    e.preventDefault();
+                    onOpenInquiry();
+                  }
+                }}
+                title={lang === 'ko' ? '이메일 문의 보내기' : 'Send email inquiry'}
+                className="text-stone-700 hover:text-stone-950 transition-colors border-b border-stone-300 hover:border-stone-950 cursor-pointer outline-none text-left"
+              >
                 {artistInfo.email}
-              </a>
+              </button>
             </div>
             <div className="flex gap-8">
               <span className="text-stone-400 w-24 uppercase tracking-wider select-none">INSTAGRAM</span>
@@ -313,14 +324,6 @@ export default function InfoView({ artistInfo, cvItems, texts, lang }: InfoViewP
                 {artistInfo.instagram}
               </a>
             </div>
-            {artistInfo.agencyKo && (
-              <div className="flex gap-8">
-                <span className="text-stone-400 w-24 uppercase tracking-wider select-none">GALLERY</span>
-                <span className="text-stone-600">
-                  {lang === 'ko' ? artistInfo.agencyKo : artistInfo.agencyEn}
-                </span>
-              </div>
-            )}
           </div>
         </div>
       </section>

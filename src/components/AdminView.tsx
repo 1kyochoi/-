@@ -22,6 +22,13 @@ import {
   ArrowDown
 } from 'lucide-react';
 import { PortfolioData, Project, TextSection, CvItem, Inquiry } from '../types';
+import {
+  isSupabaseConfigured,
+  saveArtworkInSupabase,
+  deleteArtworkFromSupabase,
+  updateArtworksOrderInSupabase,
+  uploadArtworkImage
+} from '../supabaseClient';
 
 interface AdminViewProps {
   portfolioData: PortfolioData;
@@ -45,7 +52,15 @@ export default function AdminView({
   const [loginError, setLoginError] = useState('');
 
   // Active Admin Tab
-  const [activeTab, setActiveTab] = useState<'projects' | 'profile' | 'texts' | 'cv' | 'inquiries' | 'system'>('projects');
+  const [activeTab, setActiveTab] = useState<'projects' | 'profile' | 'texts' | 'cv' | 'inquiries' | 'system' | 'categories'>('projects');
+
+  // Supabase states
+  const [showSupabaseSetup, setShowSupabaseSetup] = useState(false);
+  const [isSavingProject, setIsSavingProject] = useState(false);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [isUploadingDetails, setIsUploadingDetails] = useState(false);
+  const [isUploadingProfile, setIsUploadingProfile] = useState(false);
+  const [isUploadingHomeStart, setIsUploadingHomeStart] = useState(false);
 
   // Edit / Add States for Projects (Flattened Catalog)
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -210,7 +225,7 @@ export default function AdminView({
   };
 
   // PROJECT ACTIONS
-  const handleMoveProject = (index: number, direction: 'up' | 'down') => {
+  const handleMoveProject = async (index: number, direction: 'up' | 'down') => {
     const updatedProjects = [...portfolioData.projects];
     if (direction === 'up' && index > 0) {
       const temp = updatedProjects[index];
@@ -223,12 +238,25 @@ export default function AdminView({
     } else {
       return;
     }
+
+    if (isSupabaseConfigured()) {
+      try {
+        await updateArtworksOrderInSupabase(updatedProjects);
+      } catch (err: any) {
+        console.error(err);
+        alert(lang === 'ko' ? `순서 저장 실패: ${err.message}` : `Failed to save order in Supabase: ${err.message}`);
+        return;
+      }
+    }
+
     onUpdatePortfolio({ ...portfolioData, projects: updatedProjects });
     showNotification(lang === 'ko' ? '순서가 성공적으로 변경되었습니다.' : 'Works order successfully updated.');
   };
 
-  const handleSaveProject = (e: React.FormEvent) => {
+  const handleSaveProject = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingProject) return;
+
     let updatedProjects = [...portfolioData.projects];
 
     // Parse newline separated images to detailImages array
@@ -264,27 +292,58 @@ export default function AdminView({
       isPublished: projectForm.isPublished !== undefined ? projectForm.isPublished : true,
       isFeatured: projectForm.isFeatured !== undefined ? projectForm.isFeatured : false,
       salesStatus: projectForm.salesStatus || 'available',
+      videoUrl: projectForm.videoUrl || '',
     };
 
-    if (editingProject) {
-      // Edit mode
-      updatedProjects = updatedProjects.map((p) =>
-        p.id === editingProject.id ? compiledProjectForm : p
-      );
-      showNotification(lang === 'ko' ? '작품 및 연작 정보를 수정했습니다.' : 'Project successfully updated.');
-    } else {
-      // Add mode
-      updatedProjects.push(compiledProjectForm);
-      showNotification(lang === 'ko' ? '새 작품 및 연작을 카탈로그에 등록했습니다.' : 'New project successfully added.');
-    }
+    setIsSavingProject(true);
+    try {
+      if (editingProject) {
+        // Edit mode
+        const index = updatedProjects.findIndex(p => p.id === editingProject.id);
+        const orderIndex = index !== -1 ? index : updatedProjects.length;
 
-    onUpdatePortfolio({ ...portfolioData, projects: updatedProjects });
-    setIsAddingProject(false);
-    setEditingProject(null);
+        if (isSupabaseConfigured()) {
+          await saveArtworkInSupabase(compiledProjectForm, orderIndex);
+        }
+
+        updatedProjects = updatedProjects.map((p) =>
+          p.id === editingProject.id ? compiledProjectForm : p
+        );
+        showNotification(lang === 'ko' ? '작품 및 연작 정보를 수정했습니다.' : 'Project successfully updated.');
+      } else {
+        // Add mode
+        const orderIndex = updatedProjects.length;
+
+        if (isSupabaseConfigured()) {
+          await saveArtworkInSupabase(compiledProjectForm, orderIndex);
+        }
+
+        updatedProjects.push(compiledProjectForm);
+        showNotification(lang === 'ko' ? '새 작품 및 연작을 카탈로그에 등록했습니다.' : 'New project successfully added.');
+      }
+
+      onUpdatePortfolio({ ...portfolioData, projects: updatedProjects });
+      setIsAddingProject(false);
+      setEditingProject(null);
+    } catch (err: any) {
+      console.error(err);
+      alert(lang === 'ko' ? `저장 실패: ${err.message}` : `Save failed: ${err.message}`);
+    } finally {
+      setIsSavingProject(false);
+    }
   };
 
-  const handleDeleteProject = (id: string) => {
+  const handleDeleteProject = async (id: string) => {
     if (confirm(lang === 'ko' ? '정말로 이 작품/연작을 삭제하시겠습니까?' : 'Are you sure you want to delete this project?')) {
+      if (isSupabaseConfigured()) {
+        try {
+          await deleteArtworkFromSupabase(id);
+        } catch (err: any) {
+          console.error(err);
+          alert(lang === 'ko' ? `Supabase 삭제 실패: ${err.message}` : `Failed to delete from Supabase: ${err.message}`);
+          return;
+        }
+      }
       const updatedProjects = portfolioData.projects.filter((p) => p.id !== id);
       onUpdatePortfolio({ ...portfolioData, projects: updatedProjects });
       showNotification(lang === 'ko' ? '삭제 완료되었습니다.' : 'Project deleted.');
@@ -301,7 +360,7 @@ export default function AdminView({
   const handleStartAddProject = () => {
     setEditingProject(null);
     setProjectForm({
-      category: 'Projects',
+      category: (currentCategories[0]?.name || 'Projects') as any,
       titleKo: '',
       titleEn: '',
       artworkNameKo: '',
@@ -320,7 +379,8 @@ export default function AdminView({
       editionEn: '',
       isPublished: true,
       isFeatured: false,
-      salesStatus: 'available'
+      salesStatus: 'available',
+      videoUrl: ''
     });
     setDetailImagesText('https://images.unsplash.com/photo-1541701494587-cb58502866ab');
     setIsAddingProject(true);
@@ -408,6 +468,74 @@ export default function AdminView({
       onUpdatePortfolio({ ...portfolioData, inquiries: updatedInqs });
       showNotification(lang === 'ko' ? '기록이 삭제되었습니다.' : 'Inquiry entry deleted.');
     }
+  };
+
+  // CATEGORIES ACTIONS
+  const defaultCategories = [
+    { name: 'Projects', enabled: true },
+    { name: 'Exhibitions', enabled: true },
+    { name: 'Books', enabled: true }
+  ];
+
+  const currentCategories = portfolioData.categories && portfolioData.categories.length > 0
+    ? portfolioData.categories
+    : defaultCategories;
+
+  const handleAddCategory = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    
+    // Check for duplicates
+    if (currentCategories.some(c => c.name.toLowerCase() === trimmed.toLowerCase())) {
+      alert(lang === 'ko' ? '이미 존재하는 분류명입니다.' : 'This category name already exists.');
+      return;
+    }
+
+    const updatedCategories = [
+      ...currentCategories,
+      { name: trimmed, enabled: true }
+    ];
+
+    onUpdatePortfolio({
+      ...portfolioData,
+      categories: updatedCategories
+    });
+    showNotification(lang === 'ko' ? '새 분류가 추가되었습니다.' : 'New category successfully added.');
+  };
+
+  const handleToggleCategory = (name: string) => {
+    const updatedCategories = currentCategories.map(c => 
+      c.name === name ? { ...c, enabled: !c.enabled } : c
+    );
+    onUpdatePortfolio({
+      ...portfolioData,
+      categories: updatedCategories
+    });
+    showNotification(lang === 'ko' ? '분류 상태가 변경되었습니다.' : 'Category status successfully toggled.');
+  };
+
+  const handleDeleteCategory = (name: string) => {
+    // Check if any project is using this category
+    const hasProjects = portfolioData.projects.some(p => p.category === name);
+    if (hasProjects) {
+      if (!confirm(lang === 'ko' 
+        ? `이 분류로 등록된 작품이 존재합니다. 정말로 삭제하시겠습니까? (삭제된 분류의 작품은 Works 메뉴에서 보이지 않게 됩니다.)`
+        : `Projects are registered under this category. Are you sure you want to delete this category? (Its projects will not be visible on the Works page.)`
+      )) {
+        return;
+      }
+    } else {
+      if (!confirm(lang === 'ko' ? '이 분류를 삭제하시겠습니까?' : 'Are you sure you want to delete this category?')) {
+        return;
+      }
+    }
+
+    const updatedCategories = currentCategories.filter(c => c.name !== name);
+    onUpdatePortfolio({
+      ...portfolioData,
+      categories: updatedCategories
+    });
+    showNotification(lang === 'ko' ? '분류가 삭제되었습니다.' : 'Category successfully deleted.');
   };
 
   // Backup state
@@ -542,6 +670,16 @@ export default function AdminView({
           </button>
 
           <button
+            onClick={() => { setActiveTab('categories'); }}
+            className={`flex items-center space-x-2 py-3 px-4 rounded text-left shrink-0 cursor-pointer w-full transition-all ${
+              activeTab === 'categories' ? 'bg-stone-900 text-stone-50' : 'bg-stone-50 hover:bg-stone-100 text-stone-700 border border-stone-200/40'
+            }`}
+          >
+            <Sliders className="w-4 h-4" />
+            <span className="truncate">{lang === 'ko' ? '분류(카테고리) 관리' : 'Category Management'}</span>
+          </button>
+
+          <button
             onClick={() => { setActiveTab('profile'); }}
             className={`flex items-center space-x-2 py-3 px-4 rounded text-left shrink-0 cursor-pointer w-full transition-all ${
               activeTab === 'profile' ? 'bg-stone-900 text-stone-50' : 'bg-stone-50 hover:bg-stone-100 text-stone-700 border border-stone-200/40'
@@ -606,6 +744,91 @@ export default function AdminView({
           {/* TAB 1: PORTFOLIO CATALOG (FLATTENED PROJECTS) */}
           {activeTab === 'projects' && (
             <div className="space-y-8" id="projects-list-tab">
+              {/* Supabase Status Banner */}
+              <div className="bg-white border border-stone-200/80 rounded p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-[10px] font-mono tracking-widest uppercase font-bold text-stone-400">PERSISTENT STORAGE</span>
+                    {isSupabaseConfigured() ? (
+                      <span className="bg-emerald-50 text-emerald-700 border border-emerald-200/60 text-[9px] font-mono tracking-wider font-bold uppercase py-0.5 px-2 rounded-full flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                        SUPABASE ACTIVE
+                      </span>
+                    ) : (
+                      <span className="bg-amber-50 text-amber-700 border border-amber-200/60 text-[9px] font-mono tracking-wider font-bold uppercase py-0.5 px-2 rounded-full">
+                        LOCAL DEMO MODE
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-stone-500 font-light max-w-xl">
+                    {isSupabaseConfigured()
+                      ? (lang === 'ko' ? '작품 및 업로드된 이미지가 실시간으로 Supabase 데이터베이스와 스토리지 버킷에 영구 저장됩니다.' : 'Artworks and uploaded image files are saved directly in real-time to your Supabase database and storage bucket.')
+                      : (lang === 'ko' ? '로컬 세션 상태로 실행 중입니다. 영구 저장을 위해 .env 파일에 Supabase 환경변수를 등록해 주십시오.' : 'Currently running in simulated state. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your env variables for persistent storage.')
+                    }
+                  </p>
+                </div>
+                {!isSupabaseConfigured() && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSupabaseSetup(!showSupabaseSetup)}
+                    className="text-[10px] font-mono tracking-widest bg-stone-100 hover:bg-stone-200 text-stone-800 py-1.5 px-3 border border-stone-200 rounded uppercase cursor-pointer shrink-0 transition-colors"
+                  >
+                    {showSupabaseSetup ? (lang === 'ko' ? '안내 닫기' : 'HIDE SQL SETUP') : (lang === 'ko' ? '연동 SQL 보기' : 'VIEW SQL SETUP')}
+                  </button>
+                )}
+              </div>
+
+              {/* Toggleable SQL setup wizard for the user */}
+              {!isSupabaseConfigured() && showSupabaseSetup && (
+                <div className="bg-stone-900 text-stone-100 p-5 rounded border border-stone-800 space-y-4 font-light text-xs leading-relaxed" id="supabase-setup-instructions">
+                  <p className="font-medium text-stone-200">
+                    {lang === 'ko' ? '● Supabase 초기 연동 단계 (SQL 스크립트)' : '● Supabase Integration Steps & SQL Script'}
+                  </p>
+                  <p className="text-stone-400">
+                    {lang === 'ko'
+                      ? '1. Supabase 콘솔(supabase.com)에서 새 프로젝트를 생성합니다.\n2. SQL Editor 탭을 열고 아래 쿼리를 입력해 실행(Run)하여 artworks 테이블과 Row Level Security(RLS) 보안 규칙을 생성합니다.'
+                      : '1. Create a project in your Supabase Console (supabase.com).\n2. Navigate to SQL Editor and run this query to bootstrap the artworks table & public read access policies.'}
+                  </p>
+                  <pre className="bg-stone-950 p-3.5 border border-stone-800 rounded font-mono text-[10px] leading-normal overflow-x-auto text-stone-300 max-h-48 select-all">
+{`-- Create the artworks database table
+create table if not exists public.artworks (
+  id text primary key,
+  title text not null,
+  year text,
+  medium text,
+  size text,
+  category text,
+  description text,
+  image_url text,
+  order_index integer default 0,
+  is_published boolean default true,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Enable Row Level Security (RLS)
+alter table public.artworks enable row level security;
+
+-- Setup RLS Policies for public access and anonymous editing
+create policy "Allow public read access" on public.artworks
+  for select using (true);
+
+create policy "Allow public inserts" on public.artworks
+  for insert with check (true);
+
+create policy "Allow public updates" on public.artworks
+  for update using (true);
+
+create policy "Allow public deletes" on public.artworks
+  for delete using (true);`}
+                  </pre>
+                  <p className="text-stone-400">
+                    {lang === 'ko'
+                      ? '3. Storage 탭에서 "artworks"라는 이름으로 새로운 [Public] 버킷을 하나 만들어 줍니다. (반드시 Public으로 체크해주십시오)\n4. .env 파일에 프로젝트의 URL과 Anon Key를 추가하면 연동이 즉시 완료됩니다.'
+                      : '3. Create a public Storage Bucket named exactly "artworks" in your Storage panel.\n4. Complete the process by populating VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your env settings.'}
+                  </p>
+                </div>
+              )}
+
               <div className="flex justify-between items-center pb-4 border-b border-stone-200/60">
                 <h2 className="text-lg font-light tracking-wide text-stone-900">{lang === 'ko' ? '등록된 작품 및 연작 리스트' : 'Portfolio Works'}</h2>
                 {!isAddingProject && (
@@ -629,14 +852,15 @@ export default function AdminView({
                     <div className="flex flex-col">
                       <label className="text-[10px] font-mono text-stone-400 uppercase tracking-wider mb-1 font-bold">Category (분류) *</label>
                       <select
-                        value={projectForm.category || 'Projects'}
-                        onChange={(e) => setProjectForm({ ...projectForm, category: e.target.value as any })}
-                        className="bg-white border border-stone-200 p-2 text-xs rounded outline-none cursor-pointer"
+                        value={projectForm.category || (currentCategories[0]?.name || 'Projects')}
+                        onChange={(e) => setProjectForm({ ...projectForm, category: e.target.value })}
+                        className="bg-white border border-stone-200 p-2 text-xs rounded outline-none cursor-pointer font-mono"
                       >
-                        <option value="Projects">Projects (핵심 프로젝트)</option>
-                        <option value="Exhibitions">Exhibitions (설치/전시 기록)</option>
-                        <option value="Works">Works (단품 페인팅/드로잉)</option>
-                        <option value="Archive">Archive (기록/아카이브)</option>
+                        {currentCategories.map((cat) => (
+                          <option key={cat.name} value={cat.name}>
+                            {cat.name} {!cat.enabled ? ` (${lang === 'ko' ? '비활성화됨' : 'Disabled'})` : ''}
+                          </option>
+                        ))}
                       </select>
                     </div>
 
@@ -796,6 +1020,20 @@ export default function AdminView({
                     </div>
                   </div>
 
+                  <div className="flex flex-col">
+                    <label className="text-[10px] font-mono text-stone-400 uppercase tracking-wider mb-1 font-bold">Video Link (동영상 링크 - YouTube, Vimeo, MP4 등)</label>
+                    <input
+                      type="text"
+                      placeholder="예: https://www.youtube.com/watch?v=... 혹은 동영상 URL (없으면 비워둠)"
+                      value={projectForm.videoUrl || ''}
+                      onChange={(e) => setProjectForm({ ...projectForm, videoUrl: e.target.value })}
+                      className="bg-white border border-stone-200 p-2 text-xs rounded outline-none font-mono"
+                    />
+                    <span className="text-[9px] text-stone-400 font-sans mt-0.5">
+                      유튜브, 비메오 주소 또는 직접 .mp4 동영상 주소를 입력하면 개별 작품 상세 페이지에서 동영상이 바로 재생됩니다.
+                    </span>
+                  </div>
+
                   <div className="flex flex-col gap-2">
                     <label className="text-[10px] font-mono text-stone-400 uppercase tracking-wider font-bold">Cover Image (대표 이미지) *</label>
                     <div className="flex items-start gap-4 p-3 bg-stone-50 border border-stone-200 rounded">
@@ -816,23 +1054,43 @@ export default function AdminView({
                           placeholder="Image URL or upload a file below"
                           className="bg-white border border-stone-200 p-2 text-xs rounded outline-none font-mono w-full"
                         />
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onloadend = () => {
-                                if (typeof reader.result === 'string') {
-                                  setProjectForm(prev => ({ ...prev, coverImage: reader.result as string }));
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            disabled={isUploadingCover}
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                if (isSupabaseConfigured()) {
+                                  setIsUploadingCover(true);
+                                  try {
+                                    const url = await uploadArtworkImage(file);
+                                    setProjectForm(prev => ({ ...prev, coverImage: url }));
+                                    showNotification(lang === 'ko' ? '커버 이미지가 성공적으로 업로드되었습니다.' : 'Cover image uploaded successfully.');
+                                  } catch (err: any) {
+                                    console.error(err);
+                                    alert(err.message || 'Cover image upload failed');
+                                  } finally {
+                                    setIsUploadingCover(false);
+                                  }
+                                } else {
+                                  const reader = new FileReader();
+                                  reader.onloadend = () => {
+                                    if (typeof reader.result === 'string') {
+                                      setProjectForm(prev => ({ ...prev, coverImage: reader.result as string }));
+                                    }
+                                  };
+                                  reader.readAsDataURL(file);
                                 }
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                          }}
-                          className="text-[11px] file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-[10px] file:font-mono file:bg-stone-900 file:text-stone-50 hover:file:bg-stone-800 cursor-pointer"
-                        />
+                              }
+                            }}
+                            className="text-[11px] file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-[10px] file:font-mono file:bg-stone-900 file:text-stone-50 hover:file:bg-stone-800 cursor-pointer"
+                          />
+                          {isUploadingCover && (
+                            <span className="text-[10px] font-mono text-amber-600 animate-pulse">UPLOADING...</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -846,34 +1104,63 @@ export default function AdminView({
                         <span className="text-[11px] text-stone-500">
                           {lang === 'ko' ? '내 컴퓨터에서 이미지 파일들을 선택하여 일괄 추가합니다.' : 'Select local image files to add to the work.'}
                         </span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          onChange={(e) => {
-                            const files = e.target.files;
-                            if (files && files.length > 0) {
-                              const promises = Array.from(files).map((file: File) => {
-                                return new Promise<string>((resolve) => {
-                                  const reader = new FileReader();
-                                  reader.onloadend = () => {
-                                    resolve(reader.result as string);
-                                  };
-                                  reader.readAsDataURL(file);
-                                });
-                              });
-                              Promise.all(promises).then(base64Images => {
-                                const currentDetailImages = detailImagesText
-                                  .split('\n')
-                                  .map(img => img.trim())
-                                  .filter(img => img.length > 0);
-                                const updatedList = [...currentDetailImages, ...base64Images];
-                                setDetailImagesText(updatedList.join('\n'));
-                              });
-                            }
-                          }}
-                          className="text-[11px] file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-[10px] file:font-mono file:bg-stone-900 file:text-stone-50 hover:file:bg-stone-800 cursor-pointer"
-                        />
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            disabled={isUploadingDetails}
+                            onChange={async (e) => {
+                              const files = e.target.files;
+                              if (files && files.length > 0) {
+                                if (isSupabaseConfigured()) {
+                                  setIsUploadingDetails(true);
+                                  try {
+                                    const urls: string[] = [];
+                                    for (const file of Array.from(files) as File[]) {
+                                      const url = await uploadArtworkImage(file);
+                                      urls.push(url);
+                                    }
+                                    const currentDetailImages = detailImagesText
+                                      .split('\n')
+                                      .map(img => img.trim())
+                                      .filter(img => img.length > 0);
+                                    const updatedList = [...currentDetailImages, ...urls];
+                                    setDetailImagesText(updatedList.join('\n'));
+                                    showNotification(lang === 'ko' ? `${urls.length}개의 세부 이미지가 업로드되었습니다.` : `${urls.length} detail images uploaded successfully.`);
+                                  } catch (err: any) {
+                                    console.error(err);
+                                    alert(err.message || 'Detail images upload failed');
+                                  } finally {
+                                    setIsUploadingDetails(false);
+                                  }
+                                } else {
+                                  const promises = Array.from(files).map((file: File) => {
+                                    return new Promise<string>((resolve) => {
+                                      const reader = new FileReader();
+                                      reader.onloadend = () => {
+                                        resolve(reader.result as string);
+                                      };
+                                      reader.readAsDataURL(file);
+                                    });
+                                  });
+                                  Promise.all(promises).then(base64Images => {
+                                    const currentDetailImages = detailImagesText
+                                      .split('\n')
+                                      .map(img => img.trim())
+                                      .filter(img => img.length > 0);
+                                    const updatedList = [...currentDetailImages, ...base64Images];
+                                    setDetailImagesText(updatedList.join('\n'));
+                                  });
+                                }
+                              }
+                            }}
+                            className="text-[11px] file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-[10px] file:font-mono file:bg-stone-900 file:text-stone-50 hover:file:bg-stone-800 cursor-pointer"
+                          />
+                          {isUploadingDetails && (
+                            <span className="text-[10px] font-mono text-amber-600 animate-pulse">UPLOADING...</span>
+                          )}
+                        </div>
                       </div>
 
                       {detailImagesText.split('\n').map(x => x.trim()).filter(Boolean).length > 0 && (
@@ -989,10 +1276,20 @@ export default function AdminView({
                     </button>
                     <button
                       type="submit"
-                      className="bg-stone-900 hover:bg-stone-800 text-stone-50 font-mono text-xs py-2 px-4 rounded flex items-center space-x-1.5 cursor-pointer font-medium"
+                      disabled={isSavingProject}
+                      className={`bg-stone-900 hover:bg-stone-800 text-stone-50 font-mono text-xs py-2 px-4 rounded flex items-center space-x-1.5 cursor-pointer font-medium ${isSavingProject ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
-                      <Save className="w-3.5 h-3.5" />
-                      <span>{lang === 'ko' ? '저장하기' : 'SAVE WORK'}</span>
+                      {isSavingProject ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-stone-300 border-t-stone-50 rounded-full animate-spin"></div>
+                          <span>{lang === 'ko' ? '저장 중...' : 'SAVING...'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-3.5 h-3.5" />
+                          <span>{lang === 'ko' ? '저장하기' : 'SAVE WORK'}</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </form>
@@ -1220,20 +1517,38 @@ export default function AdminView({
                         <input
                           type="file"
                           accept="image/*"
-                          onChange={(e) => {
+                          disabled={isUploadingProfile}
+                          onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                              const reader = new FileReader();
-                              reader.onloadend = () => {
-                                if (typeof reader.result === 'string') {
-                                  setProfileImage(reader.result);
+                              if (isSupabaseConfigured()) {
+                                setIsUploadingProfile(true);
+                                try {
+                                  const url = await uploadArtworkImage(file);
+                                  setProfileImage(url);
+                                  showNotification(lang === 'ko' ? '프로필 이미지가 업로드되었습니다.' : 'Profile image uploaded successfully.');
+                                } catch (err: any) {
+                                  console.error(err);
+                                  alert(err.message || 'Profile image upload failed');
+                                } finally {
+                                  setIsUploadingProfile(false);
                                 }
-                              };
-                              reader.readAsDataURL(file);
+                              } else {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                  if (typeof reader.result === 'string') {
+                                    setProfileImage(reader.result);
+                                  }
+                                };
+                                reader.readAsDataURL(file);
+                              }
                             }
                           }}
                           className="text-[11px] file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-[10px] file:font-mono file:bg-stone-900 file:text-stone-50 hover:file:bg-stone-800 cursor-pointer"
                         />
+                        {isUploadingProfile && (
+                          <span className="text-[10px] font-mono text-amber-600 animate-pulse">UPLOADING...</span>
+                        )}
                         {profileImage && (
                           <button
                             type="button"
@@ -1274,20 +1589,38 @@ export default function AdminView({
                         <input
                           type="file"
                           accept="image/*"
-                          onChange={(e) => {
+                          disabled={isUploadingHomeStart}
+                          onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                              const reader = new FileReader();
-                              reader.onloadend = () => {
-                                if (typeof reader.result === 'string') {
-                                  setHomeStartImage(reader.result);
+                              if (isSupabaseConfigured()) {
+                                setIsUploadingHomeStart(true);
+                                try {
+                                  const url = await uploadArtworkImage(file);
+                                  setHomeStartImage(url);
+                                  showNotification(lang === 'ko' ? '홈 이미지가 업로드되었습니다.' : 'Home image uploaded successfully.');
+                                } catch (err: any) {
+                                  console.error(err);
+                                  alert(err.message || 'Home image upload failed');
+                                } finally {
+                                  setIsUploadingHomeStart(false);
                                 }
-                              };
-                              reader.readAsDataURL(file);
+                              } else {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                  if (typeof reader.result === 'string') {
+                                    setHomeStartImage(reader.result);
+                                  }
+                                };
+                                reader.readAsDataURL(file);
+                              }
                             }
                           }}
                           className="text-[11px] file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-[10px] file:font-mono file:bg-stone-900 file:text-stone-50 hover:file:bg-stone-800 cursor-pointer"
                         />
+                        {isUploadingHomeStart && (
+                          <span className="text-[10px] font-mono text-amber-600 animate-pulse">UPLOADING...</span>
+                        )}
                         {homeStartImage && (
                           <button
                             type="button"
@@ -1966,6 +2299,111 @@ export default function AdminView({
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB: CATEGORIES MANAGEMENT */}
+          {activeTab === 'categories' && (
+            <div className="space-y-6" id="categories-tab">
+              <div className="pb-4 border-b border-stone-200/60 flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-light tracking-wide text-stone-900">
+                    {lang === 'ko' ? '분류(카테고리) 관리' : 'Category Management'}
+                  </h2>
+                  <p className="text-xs text-stone-400 mt-1 font-light">
+                    {lang === 'ko' ? 'Works 메뉴에 나타날 탭 분류를 추가하고 활성/비활성화합니다.' : 'Add and enable/disable category tabs shown in the Works menu.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Add New Category Form */}
+              <div className="p-5 bg-stone-50 border border-stone-200 rounded space-y-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500 font-mono">
+                  {lang === 'ko' ? '새 분류(카테고리) 추가' : 'Create New Category'}
+                </h3>
+                <div className="flex gap-2 max-w-md">
+                  <input
+                    type="text"
+                    id="new-category-input"
+                    placeholder={lang === 'ko' ? '분류 영문명 (예: Drawings)' : 'Category Name (e.g. Drawings)'}
+                    className="flex-1 bg-white border border-stone-200 p-2 text-xs rounded outline-none font-mono"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const target = e.currentTarget;
+                        handleAddCategory(target.value);
+                        target.value = '';
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const input = document.getElementById('new-category-input') as HTMLInputElement;
+                      if (input) {
+                        handleAddCategory(input.value);
+                        input.value = '';
+                      }
+                    }}
+                    className="bg-stone-900 hover:bg-stone-800 text-stone-50 px-4 py-2 text-xs font-mono tracking-wider rounded uppercase cursor-pointer transition-colors"
+                  >
+                    {lang === 'ko' ? '추가' : 'ADD'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Category List */}
+              <div className="border border-stone-200 rounded divide-y divide-stone-100 bg-white">
+                <div className="grid grid-cols-12 gap-4 p-3 bg-stone-50/80 text-[10px] font-mono text-stone-400 uppercase tracking-wider font-semibold border-b border-stone-200">
+                  <div className="col-span-6">{lang === 'ko' ? '분류 이름' : 'Category Name'}</div>
+                  <div className="col-span-3 text-center">{lang === 'ko' ? '노출 상태' : 'Status'}</div>
+                  <div className="col-span-3 text-right">{lang === 'ko' ? '작업' : 'Actions'}</div>
+                </div>
+
+                {currentCategories.map((cat) => {
+                  const isStandard = ['Projects', 'Exhibitions', 'Books'].includes(cat.name);
+                  const projectCount = portfolioData.projects.filter(p => p.category === cat.name).length;
+
+                  return (
+                    <div key={cat.name} className="grid grid-cols-12 gap-4 p-4 items-center text-xs">
+                      <div className="col-span-6 font-mono font-medium text-stone-900">
+                        {cat.name}
+                        <span className="text-[10px] text-stone-400 font-light ml-2 font-sans">
+                          ({lang === 'ko' ? `등록된 작품 ${projectCount}개` : `${projectCount} projects`})
+                        </span>
+                      </div>
+                      <div className="col-span-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleCategory(cat.name)}
+                          className={`px-3 py-1 text-[10px] font-mono tracking-wider rounded uppercase cursor-pointer transition-all border ${
+                            cat.enabled
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                              : 'bg-stone-100 text-stone-400 border-stone-200 hover:bg-stone-200 hover:text-stone-600'
+                          }`}
+                        >
+                          {cat.enabled ? (lang === 'ko' ? '노출 중' : 'Active') : (lang === 'ko' ? '숨김' : 'Disabled')}
+                        </button>
+                      </div>
+                      <div className="col-span-3 text-right">
+                        {!isStandard ? (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCategory(cat.name)}
+                            className="p-1.5 text-red-600 hover:text-red-900 border border-red-100 bg-red-50 hover:bg-red-100 rounded cursor-pointer transition-colors inline-flex items-center"
+                            title={lang === 'ko' ? '카테고리 삭제' : 'Delete Category'}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-stone-300 font-mono uppercase tracking-wider">
+                            {lang === 'ko' ? '기본 분류' : 'System'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 

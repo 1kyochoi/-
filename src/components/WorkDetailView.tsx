@@ -3,6 +3,47 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Mail, Check, X, AlertCircle } from 'lucide-react';
 import { Project, Inquiry } from '../types';
 
+function getEmbedUrl(url: string): { type: 'youtube' | 'vimeo' | 'direct' | 'unknown'; embedUrl: string } {
+  if (!url) return { type: 'unknown', embedUrl: '' };
+  
+  const trimmed = url.trim();
+  
+  // YouTube
+  const youtubeRegExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const youtubeMatch = trimmed.match(youtubeRegExp);
+  if (youtubeMatch && youtubeMatch[2].length === 11) {
+    return {
+      type: 'youtube',
+      embedUrl: `https://www.youtube.com/embed/${youtubeMatch[2]}`
+    };
+  }
+  
+  // Vimeo
+  const vimeoRegExp = /vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/(?:[^\/]*)\/videos\/|album\/(?:\d+)\/video\/|video\/|)(\d+)(?:$|\/|\?)/;
+  const vimeoMatch = trimmed.match(vimeoRegExp);
+  if (vimeoMatch) {
+    return {
+      type: 'vimeo',
+      embedUrl: `https://player.vimeo.com/video/${vimeoMatch[1]}`
+    };
+  }
+
+  // Direct MP4 / WebM / OGG
+  const lower = trimmed.toLowerCase();
+  if (lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.ogg') || lower.includes('.mp4?') || lower.includes('.webm?')) {
+    return {
+      type: 'direct',
+      embedUrl: trimmed
+    };
+  }
+
+  // Unknown fallback
+  return {
+    type: 'unknown',
+    embedUrl: trimmed
+  };
+}
+
 interface WorkDetailViewProps {
   project: Project;
   lang: 'ko' | 'en';
@@ -17,6 +58,7 @@ export default function WorkDetailView({ project, lang, onBack, onAddInquiry }: 
   const [message, setMessage] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState('');
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   const handleOpenInquiry = () => {
     setInquiryOpen(true);
@@ -24,8 +66,8 @@ export default function WorkDetailView({ project, lang, onBack, onAddInquiry }: 
     setSenderEmail('');
     setMessage(
       lang === 'ko'
-        ? `안녕하세요, 임세형 작가님. '${project.titleKo}' (${project.year}) 작품에 대한 상세 정보 및 소장/대여 문의드립니다.`
-        : `Dear Sehyung Lim, I am writing to inquire about the details and availability of your work '${project.titleEn}' (${project.year}).`
+        ? `안녕하세요, 최원교 작가님. '${project.titleKo}' (${project.year}) 작품에 대한 상세 정보 및 소장/대여 문의드립니다.`
+        : `Dear Wonkyo Choi, I am writing to inquire about the details and availability of your work '${project.titleEn}' (${project.year}).`
     );
     setIsSubmitted(false);
     setError('');
@@ -87,13 +129,21 @@ export default function WorkDetailView({ project, lang, onBack, onAddInquiry }: 
       </div>
 
       {/* 3. Primary Full-width Showcase Image */}
-      <div className="w-full bg-stone-50 border border-stone-200 overflow-hidden mb-12 flex justify-center items-center" id="detail-primary-plate">
+      <div 
+        className="w-full bg-stone-50 border border-stone-200 overflow-hidden mb-12 flex justify-center items-center cursor-zoom-in group relative" 
+        id="detail-primary-plate"
+        onClick={() => setLightboxImage(project.coverImage)}
+        title={lang === 'ko' ? '클릭하면 사진을 크게 볼 수 있습니다' : 'Click to enlarge image'}
+      >
         <img
           src={project.coverImage}
           alt={project.titleEn}
-          className="w-full h-auto max-h-[85vh] object-contain"
+          className="w-full h-auto max-h-[85vh] object-contain transition-transform duration-300 group-hover:scale-[1.01]"
           referrerPolicy="no-referrer"
         />
+        <div className="absolute bottom-3 right-3 bg-black/40 text-white/90 text-[10px] font-mono py-1 px-2.5 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity rounded-xs pointer-events-none">
+          {lang === 'ko' ? '확대 보기' : 'CLICK TO ENLARGE'}
+        </div>
       </div>
 
       {/* 4. Elegant Minimal Description / Artist Note (500~800 chars) */}
@@ -119,65 +169,127 @@ export default function WorkDetailView({ project, lang, onBack, onAddInquiry }: 
             {lang === 'ko' ? '세부 이미지 / 추가 기록' : 'ADDITIONAL PLATES'}
           </span>
           {project.detailImages.filter(img => img !== project.coverImage).map((img, idx) => (
-            <div key={idx} className="w-full bg-stone-50 border border-stone-200/60 overflow-hidden flex justify-center items-center">
+            <div 
+              key={idx} 
+              className="w-full bg-stone-50 border border-stone-200/60 overflow-hidden flex justify-center items-center cursor-zoom-in group relative"
+              onClick={() => setLightboxImage(img)}
+              title={lang === 'ko' ? '클릭하면 사진을 크게 볼 수 있습니다' : 'Click to enlarge image'}
+            >
               <img
                 src={img}
                 alt={`${project.titleEn} - plate ${idx + 1}`}
-                className="w-full h-auto max-h-[85vh] object-contain"
+                className="w-full h-auto max-h-[85vh] object-contain transition-transform duration-300 group-hover:scale-[1.01]"
                 referrerPolicy="no-referrer"
               />
+              <div className="absolute bottom-3 right-3 bg-black/40 text-white/90 text-[10px] font-mono py-1 px-2.5 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity rounded-xs pointer-events-none">
+                {lang === 'ko' ? '확대 보기' : 'CLICK TO ENLARGE'}
+              </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* 6. Technical Specifications Sheet */}
-      <div className="bg-white border border-stone-200 p-8 mb-12" id="detail-specs-table">
-        <h3 className="text-[10px] font-mono text-stone-400 tracking-widest uppercase mb-6 border-b border-stone-100 pb-3">
-          {lang === 'ko' ? '작품 및 전시 세부 규격' : 'TECHNICAL SPECIFICATIONS'}
+      {/* Video Player Section */}
+      {project.videoUrl && project.videoUrl.trim().length > 0 && (
+        <div className="w-full mb-12 border-t border-stone-200/60 pt-8 text-left" id="detail-video-player">
+          <span className="text-[10px] font-mono text-stone-400 tracking-widest uppercase block mb-4">
+            {lang === 'ko' ? '비디오 기록 / 움직임' : 'VIDEO DOCUMENTATION'}
+          </span>
+          {(() => {
+            const parsed = getEmbedUrl(project.videoUrl);
+            if (parsed.type === 'youtube' || parsed.type === 'vimeo') {
+              return (
+                <div className="relative w-full aspect-video bg-black overflow-hidden border border-stone-200/80 shadow-xs">
+                  <iframe
+                    src={parsed.embedUrl}
+                    className="absolute inset-0 w-full h-full border-0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    title={project.titleEn}
+                  />
+                </div>
+              );
+            } else if (parsed.type === 'direct') {
+              return (
+                <div className="w-full bg-black border border-stone-200/80 overflow-hidden flex justify-center items-center shadow-xs">
+                  <video
+                    src={parsed.embedUrl}
+                    controls
+                    playsInline
+                    className="w-full h-auto max-h-[75vh]"
+                  />
+                </div>
+              );
+            } else {
+              return (
+                <div className="p-5 border border-stone-200/80 text-left bg-stone-50/50 rounded-xs">
+                  <p className="text-xs text-stone-500 font-light mb-2.5">
+                    {lang === 'ko' 
+                      ? '등록된 동영상을 확인하려면 외부 링크를 방문해 주십시오.' 
+                      : 'Please visit the external link to view the registered video documentation.'}
+                  </p>
+                  <a
+                    href={project.videoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center space-x-1.5 bg-stone-900 hover:bg-stone-800 text-stone-50 font-mono text-[10px] tracking-widest uppercase py-2 px-3.5 rounded-xs transition-colors"
+                  >
+                    <span>{lang === 'ko' ? '동영상 열기' : 'OPEN VIDEO LINK'}</span>
+                  </a>
+                </div>
+              );
+            }
+          })()}
+        </div>
+      )}
+
+      {/* 6. Simplified Technical Specifications Sheet */}
+      <div className="border-t border-stone-200/60 pt-8 mb-12 text-left" id="detail-specs-table">
+        <h3 className="text-[10px] font-mono text-stone-400 tracking-widest uppercase mb-4">
+          {lang === 'ko' ? '작품 상세 규격' : 'TECHNICAL SPECIFICATIONS'}
         </h3>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4 text-xs font-light">
-          <div className="flex justify-between border-b border-stone-100 py-2">
-            <span className="text-stone-400 font-mono text-[10px] uppercase">{lang === 'ko' ? '작업명 / 시리즈' : 'PROJECT / SERIES'}</span>
-            <span className="text-stone-900 font-medium">{lang === 'ko' ? project.titleKo : project.titleEn}</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-2 text-[11px] font-light text-stone-600">
+          <div className="flex justify-between py-1.5 border-b border-stone-100">
+            <span className="text-stone-400 font-mono text-[9px] tracking-wider uppercase">{lang === 'ko' ? '프로젝트' : 'PROJECT'}</span>
+            <span className="text-stone-850 font-medium truncate max-w-[65%]">{lang === 'ko' ? project.titleKo : project.titleEn}</span>
           </div>
 
-          <div className="flex justify-between border-b border-stone-100 py-2">
-            <span className="text-stone-400 font-mono text-[10px] uppercase">{lang === 'ko' ? '작품명' : 'PIECE TITLE'}</span>
-            <span className="text-stone-900 font-medium italic">{lang === 'ko' ? (project.artworkNameKo || '—') : (project.artworkNameEn || '—')}</span>
+          <div className="flex justify-between py-1.5 border-b border-stone-100">
+            <span className="text-stone-400 font-mono text-[9px] tracking-wider uppercase">{lang === 'ko' ? '작품명' : 'TITLE'}</span>
+            <span className="text-stone-850 font-medium italic truncate max-w-[65%]">{lang === 'ko' ? (project.artworkNameKo || '—') : (project.artworkNameEn || '—')}</span>
           </div>
 
-          <div className="flex justify-between border-b border-stone-100 py-2">
-            <span className="text-stone-400 font-mono text-[10px] uppercase">{lang === 'ko' ? '제작 연도' : 'YEAR'}</span>
-            <span className="text-stone-900 font-mono">{project.year}</span>
+          <div className="flex justify-between py-1.5 border-b border-stone-100">
+            <span className="text-stone-400 font-mono text-[9px] tracking-wider uppercase">{lang === 'ko' ? '제작 연도' : 'YEAR'}</span>
+            <span className="text-stone-850 font-mono">{project.year || '—'}</span>
           </div>
 
-          <div className="flex justify-between border-b border-stone-100 py-2">
-            <span className="text-stone-400 font-mono text-[10px] uppercase">{lang === 'ko' ? '재료 / 매체' : 'MATERIALS'}</span>
-            <span className="text-stone-900">{lang === 'ko' ? (project.materialKo || '—') : (project.materialEn || '—')}</span>
+          <div className="flex justify-between py-1.5 border-b border-stone-100">
+            <span className="text-stone-400 font-mono text-[9px] tracking-wider uppercase">{lang === 'ko' ? '재료' : 'MEDIUM'}</span>
+            <span className="text-stone-850 truncate max-w-[65%]">{lang === 'ko' ? (project.materialKo || '—') : (project.materialEn || '—')}</span>
           </div>
 
-          <div className="flex justify-between border-b border-stone-100 py-2">
-            <span className="text-stone-400 font-mono text-[10px] uppercase">{lang === 'ko' ? '규격 / 크기' : 'DIMENSIONS'}</span>
-            <span className="text-stone-900 font-mono">{project.size || 'Dimensions Variable'}</span>
+          <div className="flex justify-between py-1.5 border-b border-stone-100">
+            <span className="text-stone-400 font-mono text-[9px] tracking-wider uppercase">{lang === 'ko' ? '규격' : 'DIMENSIONS'}</span>
+            <span className="text-stone-850 font-mono">{project.size || 'Dimensions Variable'}</span>
           </div>
 
-          <div className="flex justify-between border-b border-stone-100 py-2">
-            <span className="text-stone-400 font-mono text-[10px] uppercase">{lang === 'ko' ? '소장 및 전시 장소' : 'PROVENANCE'}</span>
-            <span className="text-stone-900">{lang === 'ko' ? (project.locationKo || '작가 소장') : (project.locationEn || 'Artist Collection')}</span>
+          <div className="flex justify-between py-1.5 border-b border-stone-100">
+            <span className="text-stone-400 font-mono text-[9px] tracking-wider uppercase">{lang === 'ko' ? '소장' : 'PROVENANCE'}</span>
+            <span className="text-stone-850 truncate max-w-[65%]">{lang === 'ko' ? (project.locationKo || '작가 소장') : (project.locationEn || 'Artist Collection')}</span>
           </div>
 
-          <div className="flex justify-between border-b border-stone-100 py-2">
-            <span className="text-stone-400 font-mono text-[10px] uppercase">{lang === 'ko' ? '에디션' : 'EDITION'}</span>
-            <span className="text-stone-900 font-mono">{lang === 'ko' ? (project.editionKo || '—') : (project.editionEn || '—')}</span>
+          <div className="flex justify-between py-1.5 border-b border-stone-100">
+            <span className="text-stone-400 font-mono text-[9px] tracking-wider uppercase">{lang === 'ko' ? '에디션' : 'EDITION'}</span>
+            <span className="text-stone-850 font-mono">{lang === 'ko' ? (project.editionKo || '—') : (project.editionEn || '—')}</span>
           </div>
 
-          <div className="flex justify-between border-b border-stone-100 py-2">
-            <span className="text-stone-400 font-mono text-[10px] uppercase">{lang === 'ko' ? '판매 상태' : 'ACQUISITION'}</span>
-            <span className="text-stone-900 font-mono tracking-wider">
+          <div className="flex justify-between py-1.5 border-b border-stone-100">
+            <span className="text-stone-400 font-mono text-[9px] tracking-wider uppercase">{lang === 'ko' ? '상태' : 'ACQUISITION'}</span>
+            <span className="text-stone-850">
               {project.salesStatus === 'available' && (lang === 'ko' ? '● 소장 가능' : '● Available')}
-              {project.salesStatus === 'sold' && (lang === 'ko' ? '소장 완료 (개인소장)' : 'Acquired (Private Collection)')}
+              {project.salesStatus === 'sold' && (lang === 'ko' ? '소장 완료' : 'Acquired')}
               {project.salesStatus === 'inquire' && (lang === 'ko' ? '문의 요망' : 'Contact Gallery')}
               {project.salesStatus === 'private' && (lang === 'ko' ? '비매품' : 'Private Archive')}
             </span>
@@ -185,14 +297,14 @@ export default function WorkDetailView({ project, lang, onBack, onAddInquiry }: 
         </div>
 
         {/* Purchase Inquire trigger */}
-        <div className="mt-8 flex justify-end" id="specs-inquire-gate">
+        <div className="mt-5 flex justify-end" id="specs-inquire-gate">
           {project.salesStatus !== 'private' && (
             <button
               onClick={handleOpenInquiry}
-              className="flex items-center space-x-2 bg-stone-900 hover:bg-stone-800 text-stone-50 font-mono text-xs tracking-widest uppercase py-3 px-6 rounded-sm transition-colors cursor-pointer"
+              className="flex items-center space-x-1.5 bg-stone-900 hover:bg-stone-800 text-stone-50 font-mono text-[10px] tracking-widest uppercase py-2 px-4 rounded-xs transition-colors cursor-pointer"
             >
-              <Mail className="w-3.5 h-3.5" />
-              <span>{lang === 'ko' ? '소장 / 대여 문의하기' : 'SEND ACQUISITION INQUIRY'}</span>
+              <Mail className="w-3 h-3" />
+              <span>{lang === 'ko' ? '소장 및 대여 문의' : 'SEND INQUIRY'}</span>
             </button>
           )}
         </div>
@@ -300,6 +412,38 @@ export default function WorkDetailView({ project, lang, onBack, onAddInquiry }: 
                 )}
               </div>
             </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Lightbox Modal for High-Resolution View */}
+      <AnimatePresence>
+        {lightboxImage && (
+          <div 
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-xs cursor-zoom-out select-none"
+            onClick={() => setLightboxImage(null)}
+          >
+            <button 
+              className="absolute top-6 right-6 text-stone-400 hover:text-white transition-colors cursor-pointer p-2 z-[110]"
+              onClick={(e) => {
+                e.stopPropagation();
+                setLightboxImage(null);
+              }}
+              title={lang === 'ko' ? '닫기' : 'Close'}
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <motion.img 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              src={lightboxImage}
+              alt="Expanded view"
+              className="max-w-[95vw] max-h-[92vh] object-contain shadow-2xl"
+              referrerPolicy="no-referrer"
+              onClick={(e) => e.stopPropagation()}
+            />
           </div>
         )}
       </AnimatePresence>

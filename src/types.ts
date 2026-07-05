@@ -22,7 +22,7 @@ export interface ArtistInfo {
 
 export interface Project {
   id: string;
-  category: 'Projects' | 'Exhibitions' | 'Books';
+  category: string;
   titleKo: string; // 작업명 / 시리즈명
   titleEn: string;
   artworkNameKo?: string; // 작품명 (선택)
@@ -42,6 +42,7 @@ export interface Project {
   isPublished: boolean; // 공개/비공개
   isFeatured: boolean;
   salesStatus: 'available' | 'sold' | 'private' | 'inquire'; // 판매 가능, 판매 완료, 비공개, 문의 필요
+  videoUrl?: string; // 동영상 링크
 }
 
 export interface TextSection {
@@ -74,11 +75,17 @@ export interface Inquiry {
   isRead: boolean;
 }
 
+export interface WorkCategory {
+  name: string;
+  enabled: boolean;
+}
+
 export interface PortfolioData {
   artistInfo: ArtistInfo;
   projects: Project[];
   texts: TextSection[];
   cvItems: CvItem[];
   inquiries: Inquiry[];
+  categories?: WorkCategory[];
 }
 

@@ -4,14 +4,14 @@ export const initialPortfolioData: PortfolioData = {
   artistInfo: {
     nameKo: "최원교",
     nameEn: "CHOI WONKYO",
-    headlineKo: "부산과 서울을 오가며 활동하는 현대미술가. 지층과 외벽, 소멸하는 일상적 무대를 촉각적 표면으로 환원하는 회화와 장소특정적 설치 미술을 선보인다.",
-    headlineEn: "A contemporary artist working between Busan and Seoul, translating urban interfaces, weathered facades, and vanishing spaces into tactile paintings and site-specific installations.",
+    headlineKo: "",
+    headlineEn: "",
     bioKo: "최원교는 일상적인 도시 환경과 잊혀가는 개인적 역사의 틈새를 시각화하는 작업을 진행해 왔다. 그의 작업은 콘크리트 벽의 얼룩, 폐쇄된 공간의 빛, 유실된 가구의 흔적 등 사소하고 덧없는 풍경에서 출발한다. 다양한 층위의 질감을 살린 회화와 관람객의 공감각적 체험을 유도하는 설치 작업을 통해, 그는 고정된 물리적 공간을 유동적이고 주관적인 '기억의 무대'로 환원시킨다.",
     bioEn: "Choi Wonkyo explores the fragile crevices between modern urban topography and fading memories. Starting with overlooked details—facade weathering, concrete staining, dust accumulation, and neglected corners—he builds dense physical interfaces. Through heavily textured multi-layer paintings and quiet, site-specific organza installations, Choi converts rigid structural spaces into fluid, subjective arenas of human time.",
     email: "1kyochoi@gmail.com",
-    instagram: "@wonkyo.choi.studio",
-    agencyKo: "갤러리 컨템포러리 서울",
-    agencyEn: "Gallery Contemporary Seoul",
+    instagram: "@1kyochoi",
+    agencyKo: "",
+    agencyEn: "",
     profileImage: "https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?q=80&w=600",
     nameFontFamily: "Cormorant Garamond",
     nameColor: "#1c1917",
@@ -238,5 +238,10 @@ export const initialPortfolioData: PortfolioData = {
       artworkTitle: "Surface of Memory No. 12",
       isRead: false
     }
+  ],
+  categories: [
+    { name: 'Projects', enabled: true },
+    { name: 'Exhibitions', enabled: true },
+    { name: 'Books', enabled: true }
   ]
 };
