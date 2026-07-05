@@ -250,15 +250,19 @@ export default function WorkDetailView({ project, lang, onBack, onAddInquiry }: 
         </h3>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-2 text-[11px] font-light text-stone-600">
-          <div className="flex justify-between py-1.5 border-b border-stone-100">
-            <span className="text-stone-400 font-mono text-[9px] tracking-wider uppercase">{lang === 'ko' ? '프로젝트' : 'PROJECT'}</span>
-            <span className="text-stone-850 font-medium truncate max-w-[65%]">{lang === 'ko' ? project.titleKo : project.titleEn}</span>
-          </div>
+          {!project.hideProjectTitle && (
+            <div className="flex justify-between py-1.5 border-b border-stone-100">
+              <span className="text-stone-400 font-mono text-[9px] tracking-wider uppercase">{lang === 'ko' ? '프로젝트' : 'PROJECT'}</span>
+              <span className="text-stone-850 font-medium truncate max-w-[65%]">{lang === 'ko' ? project.titleKo : project.titleEn}</span>
+            </div>
+          )}
 
-          <div className="flex justify-between py-1.5 border-b border-stone-100">
-            <span className="text-stone-400 font-mono text-[9px] tracking-wider uppercase">{lang === 'ko' ? '작품명' : 'TITLE'}</span>
-            <span className="text-stone-850 font-medium italic truncate max-w-[65%]">{lang === 'ko' ? (project.artworkNameKo || '—') : (project.artworkNameEn || '—')}</span>
-          </div>
+          {!project.hideArtworkName && (
+            <div className="flex justify-between py-1.5 border-b border-stone-100">
+              <span className="text-stone-400 font-mono text-[9px] tracking-wider uppercase">{lang === 'ko' ? '작품명' : 'TITLE'}</span>
+              <span className="text-stone-850 font-medium italic truncate max-w-[65%]">{lang === 'ko' ? (project.artworkNameKo || '—') : (project.artworkNameEn || '—')}</span>
+            </div>
+          )}
 
           <div className="flex justify-between py-1.5 border-b border-stone-100">
             <span className="text-stone-400 font-mono text-[9px] tracking-wider uppercase">{lang === 'ko' ? '제작 연도' : 'YEAR'}</span>

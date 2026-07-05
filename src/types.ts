@@ -43,6 +43,8 @@ export interface Project {
   isFeatured: boolean;
   salesStatus: 'available' | 'sold' | 'private' | 'inquire'; // 판매 가능, 판매 완료, 비공개, 문의 필요
   videoUrl?: string; // 동영상 링크
+  hideProjectTitle?: boolean; // 프로젝트 타이틀 비활성화 여부
+  hideArtworkName?: boolean; // 작품명 비활성화 여부
 }
 
 export interface TextSection {

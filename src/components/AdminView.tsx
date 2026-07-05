@@ -175,11 +175,12 @@ export default function AdminView({
   // Password Login execution
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === '1111') {
+    const storedPassword = localStorage.getItem('admin_password') || '1111';
+    if (password === storedPassword) {
       onAdminLoginSuccess();
       setLoginError('');
     } else {
-      setLoginError(lang === 'ko' ? '비밀번호가 올바르지 않습니다. (비밀번호: 1111)' : 'Incorrect password. (Try 1111)');
+      setLoginError(lang === 'ko' ? '비밀번호가 올바르지 않습니다.' : 'Incorrect password.');
     }
   };
 
@@ -293,6 +294,8 @@ export default function AdminView({
       isFeatured: projectForm.isFeatured !== undefined ? projectForm.isFeatured : false,
       salesStatus: projectForm.salesStatus || 'available',
       videoUrl: projectForm.videoUrl || '',
+      hideProjectTitle: !!projectForm.hideProjectTitle,
+      hideArtworkName: !!projectForm.hideArtworkName,
     };
 
     setIsSavingProject(true);
@@ -380,7 +383,9 @@ export default function AdminView({
       isPublished: true,
       isFeatured: false,
       salesStatus: 'available',
-      videoUrl: ''
+      videoUrl: '',
+      hideProjectTitle: false,
+      hideArtworkName: false
     });
     setDetailImagesText('https://images.unsplash.com/photo-1541701494587-cb58502866ab');
     setIsAddingProject(true);
@@ -594,7 +599,7 @@ export default function AdminView({
           <form onSubmit={handleLogin} className="space-y-4">
             <input
               type="password"
-              placeholder={lang === 'ko' ? '비밀번호를 입력하세요 (기본: 1111)' : 'Enter password (Default: 1111)'}
+              placeholder={lang === 'ko' ? '비밀번호를 입력하세요' : 'Enter password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full bg-stone-50 border border-stone-200 focus:border-stone-950 p-3 text-xs outline-none rounded font-mono text-center tracking-widest font-bold"
@@ -902,6 +907,19 @@ create policy "Allow public deletes" on public.artworks
                     </div>
                   </div>
 
+                  <div className="flex items-center space-x-1.5 py-1 px-2 bg-stone-50 border border-stone-200/50 rounded-xs">
+                    <input
+                      type="checkbox"
+                      id="hideProjectTitle"
+                      checked={!!projectForm.hideProjectTitle}
+                      onChange={(e) => setProjectForm({ ...projectForm, hideProjectTitle: e.target.checked })}
+                      className="rounded border-stone-300 text-stone-900 focus:ring-stone-900 w-3 h-3 cursor-pointer"
+                    />
+                    <label htmlFor="hideProjectTitle" className="text-[10px] font-mono text-stone-500 uppercase tracking-wider cursor-pointer select-none">
+                      {lang === 'ko' ? '작품 상세 규격표에서 프로젝트 타이틀(PROJECT/SERIES) 줄 비활성화 / 숨기기' : 'Hide PROJECT/SERIES row in Technical Specs'}
+                    </label>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="flex flex-col">
                       <label className="text-[10px] font-mono text-stone-400 uppercase tracking-wider mb-1">Piece Title (Korean - 선택)</label>
@@ -923,6 +941,19 @@ create policy "Allow public deletes" on public.artworks
                         className="bg-white border border-stone-200 p-2 text-xs rounded outline-none"
                       />
                     </div>
+                  </div>
+
+                  <div className="flex items-center space-x-1.5 py-1 px-2 bg-stone-50 border border-stone-200/50 rounded-xs">
+                    <input
+                      type="checkbox"
+                      id="hideArtworkName"
+                      checked={!!projectForm.hideArtworkName}
+                      onChange={(e) => setProjectForm({ ...projectForm, hideArtworkName: e.target.checked })}
+                      className="rounded border-stone-300 text-stone-900 focus:ring-stone-900 w-3 h-3 cursor-pointer"
+                    />
+                    <label htmlFor="hideArtworkName" className="text-[10px] font-mono text-stone-500 uppercase tracking-wider cursor-pointer select-none">
+                      {lang === 'ko' ? '작품 상세 규격표에서 작품명(TITLE) 줄 비활성화 / 숨기기' : 'Hide TITLE row in Technical Specs'}
+                    </label>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -950,7 +981,7 @@ create policy "Allow public deletes" on public.artworks
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="flex flex-col">
-                      <label className="text-[10px] font-mono text-stone-400 uppercase tracking-wider mb-1">Size / Dimension (예: 162.2 × 130.3 cm)</label>
+                      <label className="text-[10px] font-mono text-stone-400 uppercase tracking-wider mb-1">Size / Dimension (규격, 예: 162.2 × 130.3 cm)</label>
                       <input
                         type="text"
                         placeholder="가변크기 혹은 가로세로 규격"
@@ -960,36 +991,36 @@ create policy "Allow public deletes" on public.artworks
                       />
                     </div>
                     <div className="flex flex-col">
-                      <label className="text-[10px] font-mono text-stone-400 uppercase tracking-wider mb-1 font-bold">Acquisition Status (판매 가능여부) *</label>
+                      <label className="text-[10px] font-mono text-stone-400 uppercase tracking-wider mb-1 font-bold">Acquisition Status (판매 및 소장 상태 - ACQUISITION) *</label>
                       <select
                         value={projectForm.salesStatus || 'available'}
                         onChange={(e) => setProjectForm({ ...projectForm, salesStatus: e.target.value as any })}
-                        className="bg-white border border-stone-200 p-2 text-xs rounded outline-none cursor-pointer font-mono"
+                        className="bg-white border border-stone-200 p-2 text-xs rounded outline-none cursor-pointer font-mono text-stone-800 font-medium"
                       >
-                        <option value="available">available (소장 가능)</option>
-                        <option value="sold">sold (소장 완료 - 개인 소장)</option>
-                        <option value="inquire">inquire (문의 요망 - 갤러리 경유)</option>
-                        <option value="private">private (비매품 / 단순 아카이브)</option>
+                        <option value="available">● Available (소장 가능)</option>
+                        <option value="sold">● Acquired (소장 완료)</option>
+                        <option value="inquire">● Contact Gallery (문의 요망)</option>
+                        <option value="private">● Private Archive (비매품)</option>
                       </select>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="flex flex-col">
-                      <label className="text-[10px] font-mono text-stone-400 uppercase tracking-wider mb-1">Exhibition Venue / Location (Korean)</label>
+                      <label className="text-[10px] font-mono text-stone-400 uppercase tracking-wider mb-1 font-bold">Provenance / Collection (소장처 / 전시공간 - 국문) *</label>
                       <input
                         type="text"
-                        placeholder="전시 및 설치 공간 (예: 영도 복합공간)"
+                        placeholder="소장처 혹은 전시 공간 (기본값: 작가 소장)"
                         value={projectForm.locationKo || ''}
                         onChange={(e) => setProjectForm({ ...projectForm, locationKo: e.target.value })}
                         className="bg-white border border-stone-200 p-2 text-xs rounded outline-none"
                       />
                     </div>
                     <div className="flex flex-col">
-                      <label className="text-[10px] font-mono text-stone-400 uppercase tracking-wider mb-1">Exhibition Venue / Location (English)</label>
+                      <label className="text-[10px] font-mono text-stone-400 uppercase tracking-wider mb-1 font-bold">Provenance / Collection (소장처 / 전시공간 - 영문) *</label>
                       <input
                         type="text"
-                        placeholder="e.g. Gallery L'Espace, Busan"
+                        placeholder="e.g. Artist's Collection, Gallery L'Espace"
                         value={projectForm.locationEn || ''}
                         onChange={(e) => setProjectForm({ ...projectForm, locationEn: e.target.value })}
                         className="bg-white border border-stone-200 p-2 text-xs rounded outline-none"
@@ -2448,6 +2479,44 @@ create policy "Allow public deletes" on public.artworks
                         className="hidden"
                       />
                     </label>
+                  </div>
+                </div>
+
+                <div className="border-t border-stone-200 pt-6">
+                  <h3 className="text-sm font-semibold text-stone-900 mb-2">{lang === 'ko' ? '관리자 비밀번호 변경' : 'Change Admin Password'}</h3>
+                  <p className="text-xs text-stone-500 font-light mb-4">
+                    {lang === 'ko'
+                      ? '관리자 로그인 시 사용할 비밀번호를 새로 설정합니다. 변경 즉시 새로운 비밀번호가 적용됩니다.'
+                      : 'Set a new security password to access this administrator dashboard.'}
+                  </p>
+                  
+                  <div className="flex flex-col sm:flex-row gap-4 items-end max-w-md">
+                    <div className="flex-1 flex flex-col">
+                      <label className="text-[10px] font-mono text-stone-400 uppercase tracking-wider mb-1 font-bold">{lang === 'ko' ? '새 비밀번호' : 'NEW PASSWORD'}</label>
+                      <input
+                        type="password"
+                        placeholder={lang === 'ko' ? '새 비밀번호 입력' : 'Enter new password'}
+                        id="new-admin-password"
+                        className="bg-white border border-stone-200 p-2 text-xs rounded outline-none font-mono"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const val = (document.getElementById('new-admin-password') as HTMLInputElement)?.value;
+                        if (val && val.trim().length > 0) {
+                          localStorage.setItem('admin_password', val.trim());
+                          showNotification(lang === 'ko' ? '비밀번호가 변경되었습니다.' : 'Password changed successfully.');
+                          const inputEl = document.getElementById('new-admin-password') as HTMLInputElement;
+                          if (inputEl) inputEl.value = '';
+                        } else {
+                          alert(lang === 'ko' ? '비밀번호를 입력해 주세요.' : 'Please enter a valid password.');
+                        }
+                      }}
+                      className="bg-stone-900 hover:bg-stone-800 text-stone-50 font-mono text-xs py-2 px-4 rounded uppercase transition-colors cursor-pointer h-[34px] font-medium"
+                    >
+                      {lang === 'ko' ? '비밀번호 변경' : 'CHANGE PASSWORD'}
+                    </button>
                   </div>
                 </div>
               </div>

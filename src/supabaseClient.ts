@@ -79,6 +79,8 @@ export function mapRowToProject(row: any): Project {
   let isFeatured = false;
   let salesStatus: 'available' | 'sold' | 'private' | 'inquire' = 'available';
   let videoUrl = '';
+  let hideProjectTitle = false;
+  let hideArtworkName = false;
 
   try {
     const parsedDesc = JSON.parse(row.description);
@@ -91,6 +93,8 @@ export function mapRowToProject(row: any): Project {
       isFeatured = !!parsedDesc.isFeatured;
       salesStatus = parsedDesc.salesStatus || 'available';
       videoUrl = parsedDesc.videoUrl || '';
+      hideProjectTitle = !!parsedDesc.hideProjectTitle;
+      hideArtworkName = !!parsedDesc.hideArtworkName;
     } else {
       descriptionKo = row.description || '';
       descriptionEn = row.description || '';
@@ -128,6 +132,8 @@ export function mapRowToProject(row: any): Project {
     isFeatured,
     salesStatus,
     videoUrl,
+    hideProjectTitle,
+    hideArtworkName,
   };
 }
 
@@ -161,6 +167,8 @@ export function mapProjectToRow(project: Project, orderIndex: number) {
       isFeatured: project.isFeatured,
       salesStatus: project.salesStatus,
       videoUrl: project.videoUrl || '',
+      hideProjectTitle: project.hideProjectTitle || false,
+      hideArtworkName: project.hideArtworkName || false,
     }),
     image_url: project.coverImage,
     order_index: orderIndex,
